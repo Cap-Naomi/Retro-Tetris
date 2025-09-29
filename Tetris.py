@@ -10,60 +10,71 @@ clock = pygame.time.Clock()
 fall_time = 0
 
 block_size = 25
-left_wall = 125
-right_wall = 375
+left_wall =  5  # 125 / block_size
+right_wall = 15  # 375 / block_size
+bottom_wall = 22  # (height - block_size) / block_size
 
+COLUMNS = 10
+ROWS = 20
+
+move_dist = 1
 
 """   
 TO-DO:
 - collisions with other blocks 
 - rotations
 """
+block_offset = pygame.Vector2(9, 4)
 
-def draw_grid(): # width 10, height 20 
-    for col in range(10): 
-        for row in range(20):
-            grid = pygame.Rect(125 + (col * block_size), 25 + (row * block_size), block_size - 1, block_size - 1)
-            pygame.draw.rect(screen, "gray", grid, 1)
+
+class Block(pygame.sprite.Sprite):
+    def __init__(self, color, pos):
+        super().__init__()
+
+        self.pos = pygame.Vector2(pos) + block_offset
+        self.rect = pygame.Rect(self.pos.x * block_size, self.pos.y * block_size, block_size - 1, block_size - 1)
+    
+    def update(self):
+        self.rect.topleft = self.pos * block_size
 
 
 class Shape(pygame.sprite.Sprite):
     def __init__(self):
         super().__init__()
-        self.x, self.y = 200, 25  
-        self.rotation = 0 # starts at first position
-        self.shape = random.choice(list(all_blocks.items()))[0] # getting random shape from dictionary
-        # self.shape = "J_block"
-        self.color = all_blocks[self.shape]["color"]
-        self.blocks = [] # the full shape made of blocks
-        self.rect = pygame.Rect(self.x, self.y, block_size, block_size)
-        self.locked = False
         
-    def get_shape(self): # creating shape object from multiple rects
-        block_pos = all_blocks[self.shape]["positions"][self.rotation]
-        for col in range(len(block_pos)):
-            for row in range(len(block_pos[col])):
-                    if block_pos[col][row] == "1":
-                        block = pygame.Rect(self.x + (block_size * row), self.y + (block_size * col), block_size - 1, block_size - 1)
-                        self.blocks.append(block)
+        self.x, self.y = 200, 25  
+        self.shape = random.choice(list(all_blocks.items()))[0] # getting random shape from dictionary
+        self.color = all_blocks[self.shape]["color"]
+        self.rotation = 0 # starts at first position
 
-    # check if current block x pos + block_size will put shape out of bounds
-    def horizontal_collision(self, amount): 
-        for block in self.blocks:
-            new_x = block.x + amount
-            if new_x not in range(left_wall, right_wall):
-                return True
+        self.block_pos = all_blocks[self.shape]["positions"]
+        self.blocks = [Block(self.color, pos) for pos in self.block_pos] # the full shape made of blocks
+        self.rect = pygame.Rect(self.x, self.y, block_size, block_size)
+
+        self.locked = False
+
+        self.field_data = field_data
 
     # allow x movement if horizontal_collision is false
     def move_horizontal(self, amount):
         if not self.horizontal_collision(amount):
             for block in self.blocks:
-                block.x += amount
+                block.pos.x += amount
+
+    # check if current block x pos + block_size will put shape out of bounds
+    def horizontal_collision(self, amount): 
+        for block in self.blocks:
+            new_x = block.pos.x + amount
+            if new_x not in range(left_wall, right_wall):
+                return True
+            
+           # if field_data[new_x][block.pos.y] == True: # if there is a block in the space you wanna move to
+           #     return True
 
     def vertical_collision(self, amount):
         for block in self.blocks:
-            new_y = block.y + amount
-            if new_y > HEIGHT - (block_size * 2):
+            new_y = block.pos.y + amount 
+            if new_y > bottom_wall - (amount * 2):
                 return True
 
 
@@ -75,50 +86,45 @@ class Shape(pygame.sprite.Sprite):
         clock.tick()
         if fall_time / 1000 >= fall_speed:
             fall_time = 0 # reset fall time
-            if not self.vertical_collision(block_size):
+            if not self.vertical_collision(move_dist):
                 for blocks in self.blocks: # move each block of shape
-                    blocks.y += block_size
+                    blocks.pos.y += move_dist
             else:
+                for block in self.blocks: #+++ need to get block col/row in relation to grid not whole screen 
+                    print(f"blocky: {bottom_wall - block.pos.y}, blockx: {block.pos.x}")
+                    self.field_data[19][9] = 1 # storing blocks in field_data
+                    pass
+                # print(self.field_data)
                 locked_shapes.add(self)
                 self.locked = True
 
-
     def move(self):
         if event.key == pygame.K_RIGHT:
-            self.move_horizontal(block_size)
+            self.move_horizontal(move_dist)
         if event.key == pygame.K_LEFT:
-            self.move_horizontal(-block_size)       
+            self.move_horizontal(-move_dist)       
 
         if event.key == pygame.K_DOWN:
-            if not self.vertical_collision(block_size):
+            if not self.vertical_collision(move_dist):
                 for blocks in self.blocks: # move each block of shape
-                    blocks.y += block_size
+                    blocks.pos.y += move_dist
             
             
-    def rotate(self): # what position do i want to start the next shape at basically
-        if event.key == pygame.K_UP:
-            # get certain column and row - block farthest to the left and top
-
-            self.blocks.clear() # delete current shape at rotation
-
-            if self.rotation < len(all_blocks[self.shape]["positions"]) - 1:
-                self.rotation += 1
-            else:
-                self.rotation = 0
-
-            self.get_shape() # creates new rotated shape
-
-
-        # take middle most block and set the self.x and y there
+    def rotate(self):
+        pass
         
-
+field_data = [[0 for x in range(COLUMNS)] for y in range(ROWS)] # grid for current shapes on screen
 
 locked_shapes = pygame.sprite.Group()
 
-
 new_shape = Shape()
-new_shape.get_shape()
-# all_shapes.add(new_shape)
+
+def draw_grid(): # width 10, height 20 
+    for col in range(COLUMNS): 
+        for row in range(ROWS):
+            grid = pygame.Rect(125 + (col * block_size), 25 + (row * block_size), block_size - 1, block_size - 1)
+            pygame.draw.rect(screen, "gray", grid, 1)
+            
 
 def game_window():
     screen.fill("navy blue")
@@ -126,6 +132,7 @@ def game_window():
     # for shape in all_shapes:
     for block in new_shape.blocks:
         pygame.draw.rect(screen, new_shape.color, block)
+        block.update()
     
     for shape in locked_shapes:
         for block in shape.blocks:
@@ -149,7 +156,6 @@ while running:
 
     if new_shape.locked == True:
         new_shape = Shape()
-        new_shape.get_shape()
 
     game_window()
 
